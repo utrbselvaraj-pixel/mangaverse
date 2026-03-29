@@ -7,9 +7,9 @@
    - Jikan/MAL API: Network-only (always fresh)
 ══════════════════════════════════════════════════════════ */
 
-const CACHE_SHELL   = 'mv-shell-v1';
-const CACHE_API     = 'mv-api-v1';
-const CACHE_IMAGES  = 'mv-images-v1';
+const CACHE_SHELL   = 'mv-shell-v2';
+const CACHE_API     = 'mv-api-v2';
+const CACHE_IMAGES  = 'mv-images-v2';
 const API_TTL_MS    = 5 * 60 * 1000;  // 5 minutes
 
 const SHELL_ASSETS = [
@@ -20,11 +20,7 @@ const SHELL_ASSETS = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE_SHELL)
-      .then(c => c.addAll(SHELL_ASSETS))
-      .then(() => self.skipWaiting())
-  );
+  e.waitUntil(precacheShell().then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
@@ -41,6 +37,11 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const { request } = e;
   const url = new URL(request.url);
+
+  if (request.mode === 'navigate') {
+    e.respondWith(navigateWithFallback(request));
+    return;
+  }
 
   // Jikan/MAL — always network, no cache
   if (url.hostname.includes('jikan.moe') || url.hostname.includes('myanimelist')) {
@@ -67,13 +68,13 @@ self.addEventListener('fetch', e => {
 });
 
 async function cacheFirst(cacheName, request) {
-  const cached = await caches.match(request);
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
   if (cached) return cached;
   try {
     const response = await fetch(request);
     if (response.ok) {
-      const c = await caches.open(cacheName);
-      c.put(request, response.clone());
+      cache.put(request, response.clone());
     }
     return response;
   } catch {
@@ -96,6 +97,7 @@ async function networkFirstWithTTL(cacheName, request) {
       cache.put(request, tagged);
       return response;
     }
+    return response;
   } catch { /* network failed — try cache */ }
 
   const cached = await cache.match(request);
@@ -107,4 +109,32 @@ async function networkFirstWithTTL(cacheName, request) {
     status: 503,
     headers: { 'Content-Type': 'application/json' }
   });
+}
+
+async function navigateWithFallback(request) {
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(CACHE_SHELL);
+      cache.put('./index.html', response.clone());
+    }
+    return response;
+  } catch {
+    const cache = await caches.open(CACHE_SHELL);
+    return (await cache.match('./index.html')) || new Response('Offline', { status: 503 });
+  }
+}
+
+async function precacheShell() {
+  const cache = await caches.open(CACHE_SHELL);
+  await Promise.all(SHELL_ASSETS.map(async asset => {
+    try {
+      const response = await fetch(asset, { cache: 'no-cache' });
+      if (response.ok || response.type === 'opaque') {
+        await cache.put(asset, response);
+      }
+    } catch {
+      // Non-critical asset failures should not block SW install.
+    }
+  }));
 }

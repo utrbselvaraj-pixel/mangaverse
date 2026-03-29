@@ -374,7 +374,7 @@ let pageObserver     = null;
 let lazyObserver     = null;
 let readDir          = 'ltr';
 let prevPage         = 'home-page';
-let chListListenerAttached = false; // prevent duplicate event listeners
+const boundChapterLists = new WeakSet();
 const mangaStore     = new Map();
 
 /* ══════════════════════════════════════════════════════════
@@ -945,8 +945,8 @@ function expandChList() {
 function attachChListDelegate() {
   const list = document.getElementById('ch-list');
   if (!list) return;
-  if (chListListenerAttached) return;
-  chListListenerAttached = true;
+  if (boundChapterLists.has(list)) return;
+  boundChapterLists.add(list);
   list.addEventListener('click', e => {
     const btn = e.target.closest('[data-chkey]');
     if (btn) { e.stopPropagation(); readCh(btn.dataset.chkey, e); return; }
