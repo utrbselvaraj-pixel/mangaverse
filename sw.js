@@ -72,7 +72,7 @@ self.addEventListener('fetch', e => {
 
   // MangaDex API & Proxy requests — network-first, cache fallback with TTL
   // This rule specifically targets the MangaDex API domain and proxy URLs, not image CDNs.
-  if (url.hostname.includes('api.mangadex.org') || url.hostname.includes('corsproxy') || url.hostname.includes('allorigins')) {
+  if (url.hostname.includes('api.mangadex.org') || url.hostname.includes('corsproxy') || url.hostname.includes('allorigins') || url.hostname.includes('cors.eu.org')) {
     e.respondWith(networkFirstWithTTL(CACHE_API, request));
     return;
   }
