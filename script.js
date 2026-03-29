@@ -7,7 +7,6 @@ const JIKAN      = 'https://api.jikan.moe/v4';
 const PROXIES    = [
   u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
   u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  u => `https://corsproxy.org/?${encodeURIComponent(u)}`,
   u => `https://cors.eu.org/${u}`,
 ];
 const LIMIT = 24;
