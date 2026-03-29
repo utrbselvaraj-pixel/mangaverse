@@ -43,19 +43,24 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Jikan/MAL — always network, no cache
-  if (url.hostname.includes('jikan.moe') || url.hostname.includes('myanimelist')) {
+  // Jikan API — network-only (always fresh for API data)
+  if (url.hostname.includes('jikan.moe') && url.pathname.startsWith('/v4/manga')) {
     return;
   }
 
   // Manga page images & covers — cache-first for offline reading
-  if (url.pathname.startsWith('/data/') || url.pathname.startsWith('/data-saver/') || url.pathname.startsWith('/covers/')) {
+  // Includes MangaDex CDN images (chapters, covers) and MyAnimeList CDN images (from Jikan covers)
+  if (
+    (url.hostname.includes('uploads.mangadex.org') && (url.pathname.startsWith('/data/') || url.pathname.startsWith('/data-saver/') || url.pathname.startsWith('/covers/'))) ||
+    url.hostname.includes('cdn.myanimelist.net')
+  ) {
     e.respondWith(cacheFirst(CACHE_IMAGES, request));
     return;
   }
 
-  // MangaDex API — network-first, cache fallback with TTL
-  if (url.hostname.includes('mangadex.org') || url.hostname.includes('corsproxy') || url.hostname.includes('allorigins')) {
+  // MangaDex API & Proxy requests — network-first, cache fallback with TTL
+  // This rule specifically targets the MangaDex API domain and proxy URLs, not image CDNs.
+  if (url.hostname.includes('api.mangadex.org') || url.hostname.includes('corsproxy') || url.hostname.includes('allorigins')) {
     e.respondWith(networkFirstWithTTL(CACHE_API, request));
     return;
   }
