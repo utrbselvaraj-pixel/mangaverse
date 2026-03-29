@@ -213,7 +213,6 @@ async function apiFetch(path) {
   // 2. Cached proxy
   if (workingProxy !== null) {
     try {
-      const r = await tFetch(PROXIESworkingProxy, {}, 8000);
       const r = await tFetch(PROXIES[workingProxy](url), {}, 8000);
       if (r.ok) { const data = await r.json(); apiCache.set(path, data); return data; }
     } catch {}
@@ -222,7 +221,6 @@ async function apiFetch(path) {
   for (let i = 0; i < PROXIES.length; i++) {
     if (i === workingProxy) continue;
     try {
-      const r = await tFetch(PROXIESi, {}, 9000);
       const r = await tFetch(PROXIES[i](url), {}, 9000);
       if (r.ok) { workingProxy = i; setProxy('Proxy ' + (i+1) + ' ✓'); const data = await r.json(); apiCache.set(path, data); return data; }
     } catch {}
