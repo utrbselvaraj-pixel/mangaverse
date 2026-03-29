@@ -82,6 +82,28 @@
     <button class="back-btn" onclick="goHome()">← Home</button>
     <div class="section-header"><div class="section-title">Browse</div></div>
     <div class="genre-bar" id="genre-bar"></div>
+    <div class="browse-filters">
+      <select id="filter-status" onchange="applyFilters()">
+        <option value="">Any Status</option>
+        <option value="ongoing">Ongoing</option>
+        <option value="completed">Completed</option>
+        <option value="hiatus">Hiatus</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+      <select id="filter-demo" onchange="applyFilters()">
+        <option value="">Any Demographic</option>
+        <option value="shounen">Shounen</option>
+        <option value="shoujo">Shoujo</option>
+        <option value="seinen">Seinen</option>
+        <option value="josei">Josei</option>
+      </select>
+      <select id="filter-rating" onchange="applyFilters()">
+        <option value="safe,suggestive">Safe & Suggestive</option>
+        <option value="safe">Safe Only</option>
+        <option value="erotica">Erotica</option>
+        <option value="pornographic">Pornographic</option>
+      </select>
+    </div>
     <div id="browse-grid" class="manga-grid"></div>
     <div id="browse-sentinel"></div>
   </div>

@@ -104,6 +104,13 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:0;}
 .genre-pill:hover{color:var(--text);border-color:rgba(255,255,255,0.2);}
 .genre-pill.active{color:var(--bg);background:var(--accent);border-color:var(--accent);}
 
+/* ═══ BROWSE FILTERS ═════════════════════════════════════════════════════ */
+.browse-filters { display:flex; gap:12px; margin-bottom:28px; flex-wrap:wrap; }
+.browse-filters select { background:var(--faint); border:1px solid var(--line); color:var(--text); padding:8px 12px; border-radius:var(--r); font-family:inherit; font-size:12px; outline:none; cursor:pointer; transition:border-color .2s; }
+.browse-filters select:focus { border-color:rgba(201,169,110,0.4); }
+.browse-filters select option { background:var(--bg2); color:var(--text); }
+html[data-theme="light"] .browse-filters select:focus { border-color:rgba(181, 131, 59, 0.5); }
+
 /* ═══ BACK BTN & DETAIL ══════════════════════════════════════════════════ */
 .back-btn{display:inline-flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;color:var(--dim);font-family:inherit;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:32px;padding:0;transition:color .2s;}
 .back-btn:hover{color:var(--text);}
@@ -152,6 +159,9 @@ html[data-theme="light"] .ch-read-btn { border-color: rgba(181, 131, 59, 0.45); 
 .ch-item-title{font-size:13px;font-weight:400;}
 .ch-item-title.dimmed{color:var(--dim);}
 .ch-item-info{font-size:11px;color:var(--dim);margin-top:2px;}
+.ch-dl-btn { background:none; border:none; cursor:pointer; font-size:14px; opacity:0.6; transition:opacity .2s; padding:4px; }
+.ch-dl-btn:hover { opacity:1; }
+.ch-dl-btn.done { opacity:1; filter:grayscale(100%) brightness(200%); cursor:default; }
 .ch-read-btn{background:none;color:var(--accent);border:1px solid rgba(201,169,110,0.35);padding:5px 14px;border-radius:2px;font-family:inherit;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:background .2s,color .2s;white-space:nowrap;flex-shrink:0;}
 .ch-read-btn:hover{background:var(--accent);color:var(--bg);}
 .ch-read-btn.read{color:var(--dim);border-color:var(--line);}

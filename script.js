@@ -113,21 +113,33 @@ function getPageProg(mangaId, chId) {
 /* ══════════════════════════════════════════════════════════
    NAVIGATION
 ══════════════════════════════════════════════════════════ */
-function goPage(id) {
+function goPage(id, skipHistory = false) {
   const cur = document.querySelector('.page.active');
-  if (cur && cur.id !== id) prevPage = cur.id;
+  if (cur && cur.id === id) return;
+  if (cur) prevPage = cur.id;
+  
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  ['home','browse','bookmarks','history'].forEach(k => {
+  ['home','browse','bookmarks','history', 'search'].forEach(k => {
     const el = document.getElementById('nav-' + k);
     if (el) el.classList.toggle('active', id === k + '-page');
   });
   window.scrollTo(0, 0);
+  
+  if (!skipHistory) {
+    history.pushState({ pageId: id }, '', `#${id.replace('-page', '')}`);
+  }
 }
+
+window.addEventListener('popstate', e => {
+  if (e.state && e.state.pageId) goPage(e.state.pageId, true);
+  else goPage('home-page', true);
+});
+
 function goHome() { goPage('home-page'); }
 function goBack() {
-  const safe = (prevPage === 'reader-page') ? 'detail-page' : (prevPage || 'home-page');
-  goPage(safe);
+  if (history.length > 1 && history.state) history.back();
+  else goPage((prevPage === 'reader-page') ? 'detail-page' : (prevPage || 'home-page'));
 }
 function openBrowse()  { goPage('browse-page'); loadBrowse(); }
 async function openBookmarks() {
@@ -407,6 +419,16 @@ async function loadBrowse(initialGenre = '') {
   if (!Object.keys(allTagIds).length) await fetchTags();
   browseOffset=0; browseGenre=genre;
 
+  // Reset advanced filters when coming from home page tags
+  if (genre) {
+    const statusEl = document.getElementById('filter-status');
+    const demoEl = document.getElementById('filter-demo');
+    const ratingEl = document.getElementById('filter-rating');
+    if (statusEl) statusEl.value = '';
+    if (demoEl) demoEl.value = '';
+    if (ratingEl) ratingEl.value = 'safe,suggestive';
+  }
+
   if (genre) {
     document.querySelectorAll('.genre-pill').forEach(p=> {
       p.classList.toggle('active', p.textContent.toLowerCase() === genre.toLowerCase());
@@ -440,10 +462,26 @@ function filterGenre(genre, el) {
   loadChunk();
 }
 
+function applyFilters() {
+  browseOffset = 0;
+  showSkeleton('browse-grid');
+  loadChunk();
+}
+
 async function loadChunk() {
   if (browseLoading) return;
   browseLoading=true;
-  let url = `/manga?limit=${LIMIT}&offset=${browseOffset}&includes[]=cover_art&availableTranslatedLanguage[]=en&contentRating[]=safe&contentRating[]=suggestive&order[followedCount]=desc`;
+  
+  const status = document.getElementById('filter-status')?.value;
+  const demo = document.getElementById('filter-demo')?.value;
+  const rating = document.getElementById('filter-rating')?.value || 'safe,suggestive';
+  
+  let url = `/manga?limit=${LIMIT}&offset=${browseOffset}&includes[]=cover_art&availableTranslatedLanguage[]=en&order[followedCount]=desc`;
+  
+  rating.split(',').forEach(r => url += `&contentRating[]=${r}`);
+  if (status) url += `&status[]=${status}`;
+  if (demo) url += `&publicationDemographic[]=${demo}`;
+  
   const lowerGenre = browseGenre.toLowerCase();
   if (browseGenre && allTagIds[lowerGenre]) url += `&includedTags[]=${encodeURIComponent(allTagIds[lowerGenre])}`;
   const data = await apiFetch(url);
@@ -643,6 +681,42 @@ function toggleChapterSort() {
 
 const INITIAL_CH_VISIBLE = 150;
 
+function getDownloads() {
+  try { return JSON.parse(localStorage.getItem('mv_dl') || '[]'); } catch { return []; }
+}
+
+async function downloadChapter(chId, btn, e) {
+  if (e) e.stopPropagation();
+  let dl = getDownloads();
+  if (dl.includes(chId)) return;
+  
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  try {
+    const data = await apiFetch(`/at-home/server/${chId}`);
+    if (!data?.chapter) throw new Error('No data');
+    const urls = data.chapter.data.map(f=>`${data.baseUrl}/data/${data.chapter.hash}/${f}`);
+    
+    let loaded = 0;
+    await Promise.all(urls.map(async u => {
+       try { await fetch(u, { mode: 'no-cors' }); } catch {}
+       loaded++;
+       btn.textContent = `${Math.round((loaded/urls.length)*100)}%`;
+    }));
+    
+    dl.push(chId);
+    localStorage.setItem('mv_dl', JSON.stringify(dl));
+    
+    btn.textContent = '✅';
+    btn.classList.add('done');
+    btn.disabled = false;
+    showToast('Chapter downloaded for offline reading');
+  } catch (err) {
+    btn.textContent = '❌';
+    setTimeout(() => { btn.textContent = '⬇️'; btn.disabled = false; }, 2000);
+  }
+}
+
 function renderChItem(ch, actualIdx, readChs) {
   const num    = ch.attributes.chapter ? `Chapter ${ch.attributes.chapter}` : 'Oneshot';
   const chTit  = ch.attributes.title ? ` — ${eh(ch.attributes.title)}` : '';
@@ -652,15 +726,22 @@ function renderChItem(ch, actualIdx, readChs) {
   const isRead = readChs.includes(ch.id);
   const safe   = sid(ch.id);
   mangaStore.set('ch_'+safe, { chId:ch.id, idx:actualIdx });
+  
+  const isDl = getDownloads().includes(ch.id);
+  const dlBtn = `<button class="ch-dl-btn ${isDl ? 'done' : ''}" onclick="downloadChapter('${ch.id}', this, event)" title="Download for offline">${isDl ? '✅' : '⬇️'}</button>`;
+  
   return `<div class="ch-item" data-ch="${eh(ch.attributes.chapter||'')}" data-tit="${eh(ch.attributes.title||'')}">
     <div>
       <div class="ch-item-title${isRead?' dimmed':''}" id="cht-${safe}">${num}${chTit}</div>
       <div class="ch-item-info">${gName?gName+' · ':''}${date}</div>
     </div>
-    <button class="ch-read-btn${isRead?' read':''}" id="chrb-${safe}"
-      data-chkey="ch_${safe}" aria-label="${isRead?'Read again':'Read'} ${num}">
-      ${isRead?'Read again':'Read'}
-    </button>
+    <div style="display:flex;gap:8px;align-items:center;">
+      ${dlBtn}
+      <button class="ch-read-btn${isRead?' read':''}" id="chrb-${safe}"
+        data-chkey="ch_${safe}" aria-label="${isRead?'Read again':'Read'} ${num}">
+        ${isRead?'Read again':'Read'}
+      </button>
+    </div>
   </div>`;
 }
 
@@ -945,6 +1026,10 @@ function showToast(msg) {
 ══════════════════════════════════════════════════════════ */
 applySavedTheme();
 loadHome();
+
+if (!history.state) {
+  history.replaceState({ pageId: 'home-page' }, '', '#home');
+}
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {/* non-fatal */});
