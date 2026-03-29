@@ -7,7 +7,8 @@ const JIKAN      = 'https://api.jikan.moe/v4';
 const PROXIES    = [
   u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
   u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  u => `https://cors.eu.org/${u}`,
+  u => `https://corsproxy.org/?${encodeURIComponent(u)}`, // Keeping one of the original corsproxy.org
+  u => `https://cors.eu.org/${u}`, // Adding a new proxy found in history, replaces the duplicate corsproxy.org
 ];
 const LIMIT = 24;
 const HIST_MAX = 30;
