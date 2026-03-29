@@ -48,8 +48,8 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Manga page images (MangaDex CDN) — cache-first for offline reading
-  if (url.hostname.includes('uploads.mangadex.org') && url.pathname.startsWith('/data/')) {
+  // Manga page images & covers — cache-first for offline reading
+  if (url.pathname.startsWith('/data/') || url.pathname.startsWith('/data-saver/') || url.pathname.startsWith('/covers/')) {
     e.respondWith(cacheFirst(CACHE_IMAGES, request));
     return;
   }
@@ -73,7 +73,7 @@ async function cacheFirst(cacheName, request) {
   if (cached) return cached;
   try {
     const response = await fetch(request);
-    if (response.ok) {
+    if (response.ok || response.type === 'opaque') {
       cache.put(request, response.clone());
     }
     return response;
@@ -84,6 +84,14 @@ async function cacheFirst(cacheName, request) {
 
 async function networkFirstWithTTL(cacheName, request) {
   const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  if (cached) {
+    const cachedAt = parseInt(cached.headers.get('x-sw-cached-at') || '0');
+    if (Date.now() - cachedAt < API_TTL_MS) {
+      return cached;
+    }
+  }
+
   try {
     const response = await fetch(request);
     if (response.ok) {
@@ -98,13 +106,10 @@ async function networkFirstWithTTL(cacheName, request) {
       return response;
     }
     return response;
-  } catch { /* network failed — try cache */ }
-
-  const cached = await cache.match(request);
-  if (cached) {
-    const cachedAt = parseInt(cached.headers.get('x-sw-cached-at') || '0');
-    if (Date.now() - cachedAt < API_TTL_MS) return cached;
+  } catch {
+    if (cached) return cached; // network failed — fallback to stale cache
   }
+
   return new Response(JSON.stringify({ error: 'offline' }), {
     status: 503,
     headers: { 'Content-Type': 'application/json' }

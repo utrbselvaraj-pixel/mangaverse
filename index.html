@@ -366,6 +366,7 @@ let currentMangaTitle= '';
 let currentChapters  = [];
 let currentChIdx     = 0;
 let currentChapterId = null;
+let currentPreloadId = 0;
 let browseOffset     = 0;
 let browseGenre      = '';
 let allTagIds        = {};
@@ -464,9 +465,7 @@ function openHistory() {
 }
 async function openBrowseGenre(g) {
   goPage('browse-page');
-  await loadBrowse();
-  const pill = [...document.querySelectorAll('.genre-pill')].find(p => p.textContent.toLowerCase() === g);
-  if (pill) pill.click();
+  await loadBrowse(g);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -483,14 +482,14 @@ async function apiFetch(path) {
   // 1. Direct
   try {
     const r = await tFetch(url, { headers:{ Accept:'application/json' } }, 6000);
-    if (r.ok) { setProxy('Direct ✓'); return r.json(); }
+    if (r.ok) { setProxy('Direct ✓'); return await r.json(); }
     if (r.status === 429) showToast('MangaDex is busy — retrying via proxy…');
   } catch {}
   // 2. Cached proxy
   if (workingProxy !== null) {
     try {
       const r = await tFetch(PROXIES[workingProxy](url), {}, 8000);
-      if (r.ok) return r.json();
+      if (r.ok) return await r.json();
     } catch {}
   }
   // 3. Try all proxies
@@ -498,7 +497,7 @@ async function apiFetch(path) {
     if (i === workingProxy) continue;
     try {
       const r = await tFetch(PROXIES[i](url), {}, 9000);
-      if (r.ok) { workingProxy = i; setProxy('Proxy ' + (i+1) + ' ✓'); return r.json(); }
+      if (r.ok) { workingProxy = i; setProxy('Proxy ' + (i+1) + ' ✓'); return await r.json(); }
     } catch {}
   }
   return null;
@@ -513,7 +512,7 @@ async function jikanFetch(url, retries=3) {
         await new Promise(res => setTimeout(res, 1000 * Math.pow(2, i)));
         continue;
       }
-      if (r.ok) return r.json();
+      if (r.ok) return await r.json();
     } catch {}
   }
   return null;
@@ -689,11 +688,22 @@ async function loadRated() {
 const GENRES = ['action','adventure','comedy','drama','fantasy','horror','mystery','romance','sci-fi','slice of life','sports','supernatural','thriller'];
 let browseLoading = false;
 
-async function loadBrowse() {
+async function loadBrowse(initialGenre = '') {
+  const genre = typeof initialGenre === 'string' ? initialGenre : '';
   if (!Object.keys(allTagIds).length) await fetchTags();
-  browseOffset=0; browseGenre='';
+  browseOffset=0; browseGenre=genre;
+
+  if (genre) {
+    document.querySelectorAll('.genre-pill').forEach(p=> {
+      p.classList.toggle('active', p.textContent.toLowerCase() === genre.toLowerCase());
+    });
+  } else {
+    document.querySelectorAll('.genre-pill').forEach(p=>p.classList.remove('active'));
+    const allPill = document.querySelector('.genre-pill');
+    if (allPill) allPill.classList.add('active');
+  }
+
   showSkeleton('browse-grid');
-  document.getElementById('browse-grid').innerHTML = '';
   await loadChunk();
   setupInfiniteScroll();
 }
@@ -712,7 +722,7 @@ function filterGenre(genre, el) {
   document.querySelectorAll('.genre-pill').forEach(p=>p.classList.remove('active'));
   el.classList.add('active');
   browseGenre=genre; browseOffset=0;
-  document.getElementById('browse-grid').innerHTML='';
+  showSkeleton('browse-grid');
   loadChunk();
 }
 
@@ -720,12 +730,17 @@ async function loadChunk() {
   if (browseLoading) return;
   browseLoading=true;
   let url = `/manga?limit=${LIMIT}&offset=${browseOffset}&includes[]=cover_art&availableTranslatedLanguage[]=en&contentRating[]=safe&contentRating[]=suggestive&order[followedCount]=desc`;
-  if (browseGenre && allTagIds[browseGenre]) url += `&includedTags[]=${encodeURIComponent(allTagIds[browseGenre])}`;
+  const lowerGenre = browseGenre.toLowerCase();
+  if (browseGenre && allTagIds[lowerGenre]) url += `&includedTags[]=${encodeURIComponent(allTagIds[lowerGenre])}`;
   const data = await apiFetch(url);
   browseLoading=false;
-  if (!data?.data) { showErr('browse-grid','Could not load results.',loadBrowse); return; }
   const grid = document.getElementById('browse-grid');
   if (!grid) return;
+  if (!data?.data) {
+    if (browseOffset === 0) showErr('browse-grid','Could not load results.',loadBrowse);
+    return;
+  }
+  if (browseOffset === 0) grid.innerHTML = '';
   data.data.forEach(m => grid.insertAdjacentHTML('beforeend', cardHTML(m)));
   const ids=data.data.filter(m=>!m._source).map(m=>m.id);
   if (ids.length) loadStats(ids);
@@ -754,6 +769,7 @@ function debounceSearch() {
   _searchDebounce = setTimeout(doSearch, 300);
 }
 async function doSearch() {
+  clearTimeout(_searchDebounce);
   const q = document.getElementById('search-input').value.trim();
   if (!q) return;
   document.getElementById('search-qd').textContent = '"' + q + '"';
@@ -1076,33 +1092,44 @@ async function loadChPages(chapterId) {
 }
 
 function pageErr(img, url) {
-  img.outerHTML = `<div class="page-err">
+  const p = img.dataset.page;
+  img.outerHTML = `<div class="page-err" ${p !== undefined ? `data-page="${p}"` : ''}>
     Page failed to load
     <button class="page-retry-btn" onclick="retryPage(this,'${eh(url)}')">Retry</button>
   </div>`;
 }
 function retryPage(btn, url) {
   const wrap = btn.parentElement;
+  const p = wrap.dataset.page;
   const img  = document.createElement('img');
   img.className = 'reader-page-img';
   img.alt = 'Page';
   img.src = url;
+  if (p !== undefined) img.dataset.page = p;
   img.onerror = () => pageErr(img, url);
   wrap.replaceWith(img);
-  if (lazyObserver) lazyObserver.observe(img);
   if (pageObserver)  pageObserver.observe(img);
 }
 
 async function preloadNext() {
   const nextIdx = currentChIdx + 1;
   if (nextIdx >= currentChapters.length) return;
+  const pid = ++currentPreloadId;
   try {
     const d = await apiFetch(`/at-home/server/${currentChapters[nextIdx].id}`);
-    if (d?.chapter) {
-      d.chapter.data.slice(0,3).forEach(f => { new Image().src = `${d.baseUrl}/data/${d.chapter.hash}/${f}`; });
+    if (d?.chapter && pid === currentPreloadId) {
       const badge = document.getElementById('preload-badge');
       if (badge) {
+        badge.textContent = '⬇ Caching next chapter...';
         badge.style.display = 'block';
+      }
+      const urls = d.chapter.data.map(f => `${d.baseUrl}/data/${d.chapter.hash}/${f}`);
+      for (const url of urls) {
+        if (pid !== currentPreloadId) break;
+        try { await fetch(url, { mode: 'no-cors' }); } catch {}
+      }
+      if (badge && pid === currentPreloadId) {
+        badge.textContent = '⬇ Next chapter ready';
         setTimeout(() => { badge.style.display = 'none'; }, 3000);
       }
     }
