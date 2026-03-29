@@ -43,7 +43,7 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Jikan API — network-only (always fresh for API data)
+impro  // vements ikan API — network-only (always fresh for API data)
   if (url.hostname.includes('jikan.moe') && url.pathname.startsWith('/v4/manga')) {
     return;
   }
