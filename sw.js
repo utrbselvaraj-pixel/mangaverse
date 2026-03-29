@@ -10,13 +10,21 @@
 const CACHE_SHELL   = 'mv-shell-v2';
 const CACHE_API     = 'mv-api-v2';
 const CACHE_IMAGES  = 'mv-images-v2';
-const API_TTL_MS    = 5 * 60 * 1000;  // 5 minutes
+const API_TTL_MS    = 5 * 60 * 1000; // 5 minutes
 
 const SHELL_ASSETS = [
   './',
   './index.html',
   './manifest.json',
   'https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&family=DM+Serif+Display:ital@0;1&display=swap'
+];
+
+// These are the image CDNs that should be aggressively cached (cache-first)
+const IMAGE_HOSTNAMES = [
+  'uploads.mangadex.org', // MangaDex chapter pages and covers
+  'cdn.myanimelist.net' // MyAnimeList covers (fetched via Jikan)
+  // Add other image hosts if MangaVerse starts using them
+  // e.g., 'og.image.mangadex.org' for social share images if needed
 ];
 
 self.addEventListener('install', e => {
@@ -43,19 +51,23 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-impro  // vements ikan API — network-only (always fresh for API data)
+  // Jikan API (non-image) — network-only (always fresh for API data)
+  // This rule should be specific to the Jikan API endpoint, not general MyAnimeList images.
   if (url.hostname.includes('jikan.moe') && url.pathname.startsWith('/v4/manga')) {
     return;
   }
 
   // Manga page images & covers — cache-first for offline reading
   // Includes MangaDex CDN images (chapters, covers) and MyAnimeList CDN images (from Jikan covers)
-  if (
-    (url.hostname.includes('uploads.mangadex.org') && (url.pathname.startsWith('/data/') || url.pathname.startsWith('/data-saver/') || url.pathname.startsWith('/covers/'))) ||
-    url.hostname.includes('cdn.myanimelist.net')
-  ) {
-    e.respondWith(cacheFirst(CACHE_IMAGES, request));
-    return;
+  for (const hostname of IMAGE_HOSTNAMES) {
+    if (url.hostname.includes(hostname)) {
+      // Further refine for MangaDex specific paths if necessary, but for generic image CDNs, hostname is enough.
+      if (hostname === 'uploads.mangadex.org' && !(url.pathname.startsWith('/data/') || url.pathname.startsWith('/data-saver/') || url.pathname.startsWith('/covers/'))) {
+        continue; // Skip if it's MangaDex but not a known image path
+      }
+      e.respondWith(cacheFirst(CACHE_IMAGES, request));
+      return;
+    }
   }
 
   // MangaDex API & Proxy requests — network-first, cache fallback with TTL
